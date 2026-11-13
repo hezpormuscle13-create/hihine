@@ -16,6 +16,24 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      # Tu tim thu muc co settings.gradle.kts (ke ca khi upload lech thu muc hoac upload nguyen file zip)
+      - name: Tim thu muc project
+        id: proj
+        run: |
+          if [ ! -f settings.gradle.kts ] && [ ! -f settings.gradle ]; then
+            for z in $(find . -maxdepth 3 -name "*.zip" -not -path "./.git/*"); do
+              unzip -o -q "$z" -d "extracted_$(basename "$z" .zip)" || true
+            done
+          fi
+          F=$(find . -maxdepth 5 \( -name settings.gradle.kts -o -name settings.gradle \) -not -path "./.git/*" | head -n 1)
+          if [ -z "$F" ]; then
+            echo "KHONG THAY settings.gradle.kts - repo chua co code project. Cac file hien co:"
+            find . -not -path "./.git/*" | head -60
+            exit 1
+          fi
+          echo "dir=$(dirname "$F")" >> "$GITHUB_OUTPUT"
+          echo "Project o: $(dirname "$F")"
+
       - name: Chap nhan license Android SDK
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
 
@@ -24,9 +42,10 @@ jobs:
           gradle-version: '8.7'
 
       - name: Build debug APK
-        run: gradle assembleDebug --no-daemon
+        working-directory: ${{ steps.proj.outputs.dir }}
+        run: gradle assembleDebug --no-daemon --stacktrace
 
       - uses: actions/upload-artifact@v4
         with:
           name: DeskPet-APK
-          path: app/build/outputs/apk/debug/*.apk
+          path: ${{ steps.proj.outputs.dir }}/app/build/outputs/apk/debug/*.apk
